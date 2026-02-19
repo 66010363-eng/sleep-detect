@@ -204,7 +204,7 @@ def main():
                 last_beep_time = now
 
         cv2.putText(out, f"MODE: {mode_id} - {cfg['name']} (1=Small 2=Normal 3=Glasses)",
-                    (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (255, 255, 255), 2)
+                    (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (255, 0, 50), 2)
 
         # DEBUG ขวาล่าง: แค่ eyes และ closed_frames
         debug_text = f"eyes:{eyes_count_for_warning}  closed_frames:{closed_frames}"
@@ -216,7 +216,7 @@ def main():
         x_text = max(margin, w - tw - margin)
         y_text = max(th + margin, h - margin)
         cv2.putText(out, debug_text, (x_text, y_text),
-                    font, font_scale, (255, 255, 255), thickness)
+                    font, font_scale, (255, 0, 50), thickness)
 
         cv2.imshow("USB Camera - ROI + Face + Eye Detect", out)
 
