@@ -33,14 +33,13 @@ def iou(a, b):
     return inter / union if union > 0 else 0.0
 
 
-def pick_two_eyes(eyes, face_h, upper_ratio):
+def pick_two_eyes(eyes):
     if eyes is None or len(eyes) == 0:
         return []
     eyes = [tuple(map(int, e)) for e in eyes]
-    y_limit = int(face_h * upper_ratio)
-    upper = [e for e in eyes if e[1] < y_limit]
-    candidates = upper if len(upper) >= 1 else eyes
-    candidates = sorted(candidates, key=lambda e: e[2] * e[3], reverse=True)
+
+    # เรียงตามขนาดจากใหญ่ไปเล็ก (โฟกัสที่ดวงตาคู่ที่ใหญ่ที่สุดก่อน)
+    candidates = sorted(eyes, key=lambda e: e[2] * e[3], reverse=True)
 
     picked = []
     for e in candidates:
@@ -48,6 +47,8 @@ def pick_two_eyes(eyes, face_h, upper_ratio):
             picked.append(e)
         if len(picked) == 2:
             break
+
+    # เรียงตำแหน่งซ้ายไปขวา
     picked = sorted(picked, key=lambda e: e[0])
     return picked
 
@@ -164,7 +165,7 @@ def mqtt_publish(client, state, topic, payload, retain=False):
 
 
 def main():
-    cap = cv2.VideoCapture(1, cv2.CAP_DSHOW)
+    cap = cv2.VideoCapture(0)
     if not cap.isOpened():
         raise RuntimeError("ไม่พบกล้อง USB หรือเปิดกล้องไม่ได้ (ลองเปลี่ยน index เป็น 0,1,2)")
 
@@ -227,9 +228,9 @@ def main():
 
         h, w = frame.shape[:2]
 
-        roi_w = 300
-        roi_h = 300
-        x1 = (w - roi_w) // 2 - 170
+        roi_w = 700
+        roi_h = 700
+        x1 = (w - roi_w) // 2 - 400
         y1 = (h - roi_h) // 2
         x2 = x1 + roi_w
         y2 = y1 + roi_h
@@ -278,18 +279,26 @@ def main():
             out = cv2.addWeighted(overlay, HILIGHT_ALPHA, out, 1 - HILIGHT_ALPHA, 0)
             cv2.line(out, (abs_fx, abs_y_limit), (abs_fx + fw, abs_y_limit), (0, 255, 255), 2)
 
-            face_roi_gray = roi_gray[fy:fy+fh, fx:fx+fw]
+            # ==========================================
+            # [ส่วนที่แก้ไข]
+            # ตัดภาพเฉพาะพื้นที่ "ด้านบน" (ความสูงจาก 0 ถึง y_limit)
+            upper_face_roi_gray = roi_gray[fy:fy + y_limit, fx:fx + fw]
 
+            # โยนภาพที่มีแค่ครึ่งบนให้ Cascade ตรวจหาตา
             eyes_raw = eye_cascade.detectMultiScale(
-                face_roi_gray,
+                upper_face_roi_gray,
                 scaleFactor=eye_scale,
                 minNeighbors=eye_neighbors,
                 minSize=eye_minsize
             )
 
-            eyes_picked = pick_two_eyes(eyes_raw, face_h=fh, upper_ratio=upper_ratio)
+            # เรียกฟังก์ชันที่ตัดพารามิเตอร์เก่าออกแล้ว
+            eyes_picked = pick_two_eyes(eyes_raw)
+            # ==========================================
+
             eyes_count_for_warning = len(eyes_picked)
 
+            # วาดกรอบดวงตา (พิกัด ex, ey ที่คืนค่ามายังสอดคล้องกับ abs_fx, abs_fy อยู่แล้ว)
             for (ex, ey, ew, eh) in eyes_picked:
                 cv2.rectangle(out,
                               (abs_fx + ex, abs_fy + ey),
@@ -300,8 +309,6 @@ def main():
                 closed_frames += 1
             else:
                 closed_frames = 0
-        else:
-            closed_frames = 0
 
         # ===== สถานะง่วง/หลับใน =====
         drowsy = (closed_frames >= CLOSED_FRAMES_THRESHOLD)
